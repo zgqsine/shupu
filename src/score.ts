@@ -1252,8 +1252,7 @@ export function mergeTemporaryVoices(score: Score, main: string) {
       moveLaneInterval(score, after.id, before.id, after.start!, after.end!);
       before.end = after.end;
     }
-    const removed = new Set(right);
-    score.lanes = score.lanes.filter(lane => !removed.has(lane));
+    removeLanes(score, new Set(right.map(lane => lane.id)));
   }
 }
 
@@ -1277,7 +1276,7 @@ export function deleteTemporaryVoiceInterval(score: Score, cursor: Cursor, end: 
   } else eraseInterval(score, side.id, from, limit);
   if (score.tempoLines) score.tempoLines = score.tempoLines.filter(line => line.lane !== side.id || line.from < from || line.from >= limit);
   splitSideAt(score, side, limit);
-  if (from <= side.start!) score.lanes = score.lanes.filter(lane => lane !== side);
+  if (from <= side.start!) removeLanes(score, new Set([side.id]));
   else side.end = from;
   if (source === 0 && limit < to) deleteTemporaryVoiceInterval(score, { lane: main.id, at: limit }, to);
   mergeTemporaryVoices(score, main.id);
