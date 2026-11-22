@@ -163,6 +163,22 @@ export function importMusicXML(source: string, name: string, preserveBeams = fal
   let chordLabels: Record<string, { text?: string; actual?: string }> = {};
   if (chordMetadata && chordMetadata.length < 4_000_000) try { chordLabels = JSON.parse(chordMetadata) ?? {}; } catch {}
   const tempoMetadata = projectMetadata('tempo');
+  const tempoLineWords = new Map<number, Set<string>>();
+  if (tempoMetadata) try {
+    const lines = JSON.parse(tempoMetadata)?.lines;
+    if (Array.isArray(lines)) for (const line of lines) if (line && Number.isFinite(line.from)) {
+      const label = String(line.label ?? line.kind ?? '').trim().slice(0, 80);
+      if (label) {
+        let labels = tempoLineWords.get(line.from);
+        if (!labels) tempoLineWords.set(line.from, labels = new Set());
+        labels.add(label);
+      }
+    }
+  } catch {}
+  const isTempoLineWord = (at: number, caption: string) => {
+    const labels = tempoLineWords.get(at);
+    return !!labels && [...labels].some(label => label === caption || !caption.split(label).join('').trim());
+  };
   let barSettings: Record<number, { meter?: Meter; pickup?: boolean; firstKey?: boolean; firstMeter?: boolean; titleSignatures?: Score['titleSignatures'] }> = {};
   if (metadata && metadata.length < 100000) try { barSettings = JSON.parse(metadata) ?? {}; } catch {}
   const tempos = new Map<number, { mark: TempoMark; rank: number }>();
@@ -651,7 +667,7 @@ export function importMusicXML(source: string, name: string, preserveBeams = fal
             const dashId = track + ':' + (dash?.getAttribute('number') ?? '1');
             const rank = -partIndex * .01;
             const base = { id: `xml-tempo-${partIndex}-${location}`, at: location };
-            let usedWords = isRoute || readSwing(sound, soundAt, caption);
+            let usedWords = isRoute || readSwing(sound, soundAt, caption) || isTempoLineWord(location, caption);
             let usedDash = false;
             if (dashKind === 'start' && gradual) {
               tempoDashes.set(dashId, { from: location, kind: gradual, label: caption });
