@@ -1345,6 +1345,7 @@ export function openScore(json: string): Score {
   const valid = (condition: unknown) => {
     if (!condition) throw new Error('不是受支持的简谱工程，或工程内容不完整。');
   };
+  const record = (value: unknown) => !!value && typeof value === 'object' && !Array.isArray(value);
   const integer = (value: number, minimum: number, maximum: number) =>
     Number.isInteger(value) && value >= minimum && value <= maximum;
   const time = (value: number, minimum: number, maximum: number) =>
@@ -1391,7 +1392,6 @@ export function openScore(json: string): Score {
   }));
   const flag = (value: unknown) => value === undefined || typeof value === 'boolean';
   valid(score.titleSignatures === undefined || score.titleSignatures && flag(score.titleSignatures.key) && flag(score.titleSignatures.meter));
-  const record = (value: unknown) => !!value && typeof value === 'object' && !Array.isArray(value);
   valid(flag(score.justifyBottom));
   valid(score.paper === undefined || record(score.paper) && time(score.paper.width, 80, 1200) && time(score.paper.height, 80, 1200));
   valid(score.folio === undefined || score.folio === false || record(score.folio) && integer(score.folio.start, 1, 9999) &&
@@ -1413,7 +1413,7 @@ export function openScore(json: string): Score {
           return integer(value, min, max);
         }))));
   valid(Array.isArray(score.measures) && score.measures.length > 0 && score.measures.length <= 600
-    && score.measures.every(measure => time(measure.length, 1e-8, 3072)
+    && score.measures.every(measure => record(measure) && time(measure.length, 1e-8, 3072)
       && [undefined, 'line', 'page'].includes(measure.system)
       && (measure.number === undefined || text(measure.number))
       && (measure.numberLabel === undefined || text(measure.numberLabel))
@@ -1429,7 +1429,7 @@ export function openScore(json: string): Score {
       && (!measure.actualMeter || meterLength(measure.actualMeter) === measure.length)));
   const measures = measureTable(score);
   if (score.endings !== undefined) valid(Array.isArray(score.endings) && score.endings.length <= 600 &&
-    score.endings.every(ending => integer(ending.start, 0, score.measures.length - 1) &&
+    score.endings.every(ending => record(ending) && integer(ending.start, 0, score.measures.length - 1) &&
       integer(ending.end, ending.start, score.measures.length - 1) && Array.isArray(ending.passes) &&
       ending.passes.length > 0 && ending.passes.every(pass => integer(pass, 1, 8)) && appearance(ending.appearance) &&
       (ending.fromAt === undefined || time(ending.fromAt, measures[ending.start].start, measures[ending.start].end) && ending.fromAt < measures[ending.start].end) &&
@@ -1439,6 +1439,7 @@ export function openScore(json: string): Score {
   const end = measures.at(-1)!.end;
   const rate = (value: number) => Number.isFinite(value) && value > 0 && value <= 1200;
   if (score.tempoMarks !== undefined) valid(Array.isArray(score.tempoMarks) && score.tempoMarks.length <= 5000 &&
+    score.tempoMarks.every(mark => record(mark)) &&
     new Set(score.tempoMarks.map(mark => mark.id)).size === score.tempoMarks.length &&
     new Set(score.tempoMarks.map(mark => `${mark.at}:${mark.kind === 'swing' || mark.kind === 'straight'}`)).size === score.tempoMarks.length && score.tempoMarks.every(mark =>
       text(mark.id) && time(mark.at, 0, end) && mark.at < end && appearance(mark.appearance) && (mark.label === undefined || text(mark.label)) &&
@@ -1450,6 +1451,7 @@ export function openScore(json: string): Score {
         mark.kind === 'metronome' && TEMPO_UNITS.includes(mark.unit as typeof TEMPO_UNITS[number]) &&
         integer(mark.dots, 0, 2) && rate(mark.bpm) && (mark.writtenRate === undefined || text(mark.writtenRate)))));
   if (score.tempoLines !== undefined) valid(Array.isArray(score.tempoLines) && score.tempoLines.length <= 5000 &&
+    score.tempoLines.every(line => record(line)) &&
     new Set(score.tempoLines.map(line => line.id)).size === score.tempoLines.length && score.tempoLines.every(line =>
       text(line.id) && time(line.from, 0, end) && time(line.to, line.from, end) && line.to > line.from && TEMPO_LINE_KINDS.includes(line.kind) &&
       (line.label === undefined || text(line.label)) && (line.target === undefined || rate(line.target)) &&
@@ -1468,13 +1470,14 @@ export function openScore(json: string): Score {
       [undefined, 'line', 'page'].includes(boundary.break) && flag(boundary.fermata) && appearance(boundary.appearance) &&
       appearance(boundary.breakAppearance) && appearance(boundary.fermataAppearance)));
   valid(Array.isArray(score.lanes) && score.lanes.length > 0 && score.lanes.length <= 100
-    && score.lanes.every(lane => text(lane.id) && text(lane.name) && integer(lane.octave, 1, 7) && flag(lane.splitStart) && flag(lane.fullNoteVolume) &&
+    && score.lanes.every(lane => record(lane) && text(lane.id) && text(lane.name) && integer(lane.octave, 1, 7) && flag(lane.splitStart) && flag(lane.fullNoteVolume) &&
       (lane.shortName === undefined || text(lane.shortName)) && (lane.displayOctave === undefined || integer(lane.displayOctave, 1, 7))
       && [undefined, 'show', 'hide', 'rest'].includes(lane.display) && textFormat(lane.nameText) && textFormat(lane.shortNameText) &&
       (lane.sharedNamePlacement === undefined || appearance({ placement: lane.sharedNamePlacement }))));
   const lanes = new Map(score.lanes.map(lane => [lane.id, lane]));
   valid(lanes.size === score.lanes.length && score.lanes.some(lane => lane.parent === undefined));
   if (score.chordSymbols !== undefined) valid(Array.isArray(score.chordSymbols) && score.chordSymbols.length <= 5000 &&
+    score.chordSymbols.every(symbol => record(symbol)) &&
     new Set(score.chordSymbols.map(symbol => symbol.id)).size === score.chordSymbols.length &&
     score.chordSymbols.every(symbol => text(symbol.id) && text(symbol.text) &&
       (symbol.actual === undefined || text(symbol.actual) && parseChord(symbol.actual)) &&
@@ -1516,7 +1519,7 @@ export function openScore(json: string): Score {
         bracket === null ? text(id) : validBracket(bracket) && bracket.id === id)))));
   valid(score.measures.every(measure => Object.keys(measure.highlights ?? {}).every(lane => lanes.has(lane))));
   if (score.importNotices !== undefined) valid(Array.isArray(score.importNotices) && score.importNotices.length <= 5000 &&
-    score.importNotices.every(notice => text(notice.text) &&
+    score.importNotices.every(notice => record(notice) && text(notice.text) &&
       (notice.measure === undefined || integer(notice.measure, 0, score.measures.length - 1)) &&
       (notice.offset === undefined || notice.measure !== undefined && time(notice.offset, 0, end)) &&
       (notice.lane === undefined || lanes.has(notice.lane))));
@@ -1524,11 +1527,11 @@ export function openScore(json: string): Score {
     valid(lanes.has(lane.parent) && !lanes.get(lane.parent)!.parent
       && time(lane.start!, 0, end) && time(lane.end!, lane.start!, end) && lane.start! < lane.end!);
   }
-  valid(Array.isArray(score.notes) && score.notes.length <= 30000);
+  valid(Array.isArray(score.notes) && score.notes.length <= 30000 && score.notes.every(note => record(note)));
   const notes = new Map<string, Note>();
   const laneEnds = new Map<string, number>();
   if (score.tuplets !== undefined) {
-    valid(Array.isArray(score.tuplets) && score.tuplets.length <= 30000);
+    valid(Array.isArray(score.tuplets) && score.tuplets.length <= 30000 && score.tuplets.every(group => record(group)));
     const groups = new Map(score.tuplets.map(group => [group.id, group]));
     const stacks = new Map<string, Tuplet[]>();
     const bars = measureTable(score);
@@ -1562,12 +1565,13 @@ export function openScore(json: string): Score {
         ORNAMENT_KINDS.includes(kind as OrnamentKind) && record(item) &&
         (item.upper === undefined || integer(item.upper, -2, 2)) && (item.lower === undefined || integer(item.lower, -2, 2)) &&
         (item.strokes === undefined || integer(item.strokes, 1, 3)) && [item.fromUpper, item.delayed, item.wave].every(flag)))
-      && note.pitches.every(pitch => integer(pitch.degree, 1, 7) && integer(pitch.octave, 0, 8)
+      && note.pitches.every(pitch => record(pitch) && integer(pitch.degree, 1, 7) && integer(pitch.octave, 0, 8)
         && integer(pitch.alter, -2, 2) && flag(pitch.natural) && flag(pitch.courtesy) && [undefined, 'show', 'hide'].includes(pitch.signStyle))
       && (note.value === undefined || [...VALUES, 6, 3].some(value => value === note.value))
       && (note.dots === undefined || integer(note.dots, 0, 2))
       && (note.grace === undefined || record(note.grace) && (note.pitches.length > 0 || note.unpitched) && Object.entries(note.grace).every(([side, group]) =>
         GRACE_SIDES.some(item => item === side) && record(group) && Array.isArray(group.notes) && group.notes.length > 0 && group.notes.length <= 64 &&
+        group.notes.every(item => record(item)) &&
         new Set(group.notes.map(item => item.id)).size === group.notes.length &&
         (group.borrow === undefined || time(group.borrow, 0, 100)) &&
         (group.layout === undefined || record(group.layout) &&
@@ -1578,19 +1582,20 @@ export function openScore(json: string): Score {
           return text(link.id) && from >= 0 && to > from && integer(link.fromPitch, 0, group.notes[from].pitches.length - 1) &&
             integer(link.toPitch, 0, group.notes[to].pitches.length - 1) && (link.kind === 'slur' || link.kind === 'tie' && to === from + 1);
         })) &&
-        group.notes.every(item => text(item.id) && VALUES.some(value => value === item.value) &&
+        group.notes.every(item => record(item) && text(item.id) && VALUES.some(value => value === item.value) &&
           (item.beam === undefined || BEAM_MODES.includes(item.beam)) &&
           [item.staccato, item.accent, item.tenuto, item.fermata].every(flag) &&
           [undefined, 'upbow', 'comma', 'tick', 'salzedo'].includes(item.breath) &&
           (item.dots === undefined || integer(item.dots, 0, 2)) && Array.isArray(item.pitches) && item.pitches.length > 0 && item.pitches.length <= 8 &&
-          item.pitches.every(pitch => integer(pitch.degree, 1, 7) && integer(pitch.octave, 0, 8) &&
+          item.pitches.every(pitch => record(pitch) && integer(pitch.degree, 1, 7) && integer(pitch.octave, 0, 8) &&
             integer(pitch.alter, -2, 2) && flag(pitch.natural) && flag(pitch.courtesy) && [undefined, 'show', 'hide'].includes(pitch.signStyle)))))
       && [note.lyric, note.dynamic, note.text, note.interNoteText, note.rehearsal].every(value => value === undefined || text(value))
       && (note.extensionText === undefined || record(note.extensionText) && Object.entries(note.extensionText).every(([offset, row]) =>
         time(Number(offset), 0, note.length) && Number(offset) > 0 && Number(offset) < note.length && record(row) && Object.entries(row).every(([key, value]) => isExtensionText(key) && text(value))))
       && (note.verses === undefined || Array.isArray(note.verses) && note.verses.length <= 20 &&
+        note.verses.every(verse => record(verse)) &&
         new Set(note.verses.map(verse => verse.number)).size === note.verses.length &&
-        note.verses.every(verse => integer(verse.number, 1, 20) && (verse.text === undefined || text(verse.text)) &&
+        note.verses.every(verse => record(verse) && integer(verse.number, 1, 20) && (verse.text === undefined || text(verse.text)) &&
           [undefined, 'start', 'continue', 'stop'].includes(verse.extend) && flag(verse.syllabicNext)))
       && [undefined, 'break', 'join'].includes(note.beam)
       && (note.beams === undefined || note.beams && typeof note.beams === 'object' && !Array.isArray(note.beams) &&
@@ -1603,7 +1608,7 @@ export function openScore(json: string): Score {
     notes.set(note.id, note);
     laneEnds.set(note.lane, tickEnd(note));
   }
-  valid(Array.isArray(score.spans) && score.spans.length <= 30000);
+  valid(Array.isArray(score.spans) && score.spans.length <= 30000 && score.spans.every(span => record(span)));
   for (const span of score.spans) {
     const from = notes.get(span.from);
     const to = notes.get(span.to);
