@@ -860,9 +860,15 @@ export function addMeasure(score: Score) {
 }
 
 function blankMeasure(bar: ReturnType<typeof measureTable>[number]): Measure {
-  return structuredClone({ length: bar.length, meter: bar.meter, actualMeter: bar.actualMeter, pickup: bar.pickup,
+  const measure: Measure = structuredClone({ length: bar.length, meter: bar.meter, actualMeter: bar.actualMeter, pickup: bar.pickup,
     key: bar.key, meterHidden: bar.meterHidden, keyHidden: bar.keyHidden, numberStep: bar.numberStep,
     numberDisplay: bar.numberDisplay, highlights: bar.highlights });
+  if (bar.pickup) {
+    measure.length = meterLength(bar.meter);
+    delete measure.pickup;
+    delete measure.actualMeter;
+  }
+  return measure;
 }
 
 export const sameMeter = (a: Meter, b: Meter) => a.numerator === b.numerator && a.denominator === b.denominator && a.groups.join() === b.groups.join();
@@ -998,7 +1004,7 @@ export function insertBlankMeasure(score: Score, anchor: number, after: boolean)
   const prior = bars[index - 1] ?? { key: score.key ?? keyForTonic(score.tonic), meter: score };
   if (!score.measures[anchor].meter && sameMeter(prior.meter, template.meter)) delete bar.meter;
   if (!score.measures[anchor].key && sameKey(prior.key, template.key)) delete bar.key;
-  const step = template.sequence - (bars[anchor - 1]?.sequence ?? 0);
+  const step = template.pickup ? 1 : template.sequence - (bars[anchor - 1]?.sequence ?? 0);
   bar.numberStep = step;
   const boundaries = Array.from({ length: bars.length + 1 }, (_, i) => boundaryAt(score, i));
   const splitAnchors = new Map<string, SplitAnchor>();
@@ -1023,7 +1029,8 @@ export function insertBlankMeasure(score: Score, anchor: number, after: boolean)
   if (bars[index]) {
     inheritBarContext(score, index + 1, bars[index]);
     const following = score.measures[index + 1];
-    if (following.numberStep === undefined) {
+    if (following.pickup) following.numberStep = 1;
+    else if (following.numberStep === undefined) {
       const oldStep = bars[index].sequence - (bars[index - 1]?.sequence ?? 0);
       if (oldStep !== 1) following.numberStep = oldStep;
     }
